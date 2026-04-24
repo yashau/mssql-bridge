@@ -1,0 +1,56 @@
+[package]
+name = "mssql-bridge"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description = "A thin HTTP-to-MSSQL proxy. Speak SQL Server from anywhere that can make a fetch call."
+license = "MIT"
+repository = "https://github.com/yashau/mssql-bridge"
+readme = "README.md"
+keywords = ["mssql", "sql-server", "http", "proxy", "rest"]
+categories = ["database", "web-programming::http-server"]
+
+[[bin]]
+name = "mssql-bridge"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["compat"] }
+axum = { version = "0.7", features = ["macros"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "timeout", "limit", "cors"] }
+hyper = "1"
+
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+toml = "0.8"
+
+tiberius = { version = "0.12", default-features = false, features = ["tds73", "chrono", "rust_decimal", "rustls"] }
+bb8 = "0.8"
+bb8-tiberius = "0.15"
+futures-util = "0.3"
+tokio-stream = "0.1"
+bytes = "1"
+
+moka = { version = "0.12", features = ["future"] }
+chrono = { version = "0.4", features = ["serde"] }
+rust_decimal = { version = "1", features = ["serde-str"] }
+uuid = { version = "1", features = ["v4"] }
+
+base64 = "0.22"
+anyhow = "1"
+thiserror = "1"
+clap = { version = "4", features = ["derive", "env"] }
+
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-service = "0.7"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
+opt-level = 3

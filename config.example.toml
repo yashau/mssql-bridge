@@ -1,0 +1,51 @@
+# mssql-bridge configuration
+# Copy to config.toml and edit for your environment.
+
+[server]
+# Listen address. For on-box deployments bound to a private interface, prefer
+# the private IP over 0.0.0.0. For Cloudflare Mesh, you typically want the
+# interface that is routed into the mesh subnet.
+bind = "127.0.0.1:3001"
+# Overall HTTP request timeout, including pool wait + query execution.
+request_timeout_secs = 120
+# Max request body size in bytes.
+max_body_bytes = 1048576
+
+[mssql]
+host = "localhost"
+port = 1433
+# Named instance (e.g. "SQLEXPRESS"). When set, `port` is ignored and the
+# actual port is discovered via SQL Server Browser on UDP 1434. Ensure UDP
+# 1434 is reachable from the bridge to the host.
+# instance_name = "SQLEXPRESS"
+# Optional default database applied when the caller does not specify one.
+# default_database = "master"
+# off | on | required | not_supported
+encryption = "required"
+trust_server_certificate = false
+application_name = "mssql-bridge"
+
+[pool]
+# Maximum concurrent connections held per (user, password, database) tuple.
+max_connections_per_credential = 10
+min_idle = 0
+connection_timeout_secs = 10
+idle_timeout_secs = 300
+# Cap on the number of distinct credential pools held in memory.
+# LRU eviction past this count.
+max_credential_pools = 64
+# Idle credential pools are evicted after this long.
+credential_ttl_secs = 900
+
+[limits]
+# Upper bound on rows returned per query. Queries that exceed this are
+# aborted with 413. Raise if you legitimately need to ship more.
+max_rows = 100000
+# Per-query timeout inside SQL Server execution.
+query_timeout_secs = 60
+
+[log]
+# trace | debug | info | warn | error
+level = "info"
+# Log the SQL text (never the params). Useful for auditing; off by default.
+log_sql = false

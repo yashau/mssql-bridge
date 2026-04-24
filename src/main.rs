@@ -71,78 +71,83 @@ enum Cmd {
     #[cfg(windows)]
     Uninstall,
 
-    /// Print a default config.toml to stdout.
-    PrintConfig,
+    /// Print a default config.toml. Writes to stdout unless --output is given.
+    PrintConfig {
+        /// Write the config directly to this path, using UTF-8 (no BOM).
+        /// Bypasses PowerShell redirect encoding issues.
+        #[arg(long, short, value_name = "PATH")]
+        output: Option<PathBuf>,
+    },
 }
 
 #[derive(Args, Debug, Clone, Default)]
 struct Overrides {
     /// Path to config.toml. Overrides still apply on top of it.
-    #[arg(long, short, value_name = "PATH", env = "MSSQL_BRIDGE_CONFIG")]
+    #[arg(long, short, value_name = "PATH", env = "MSSQL_BRIDGE_CONFIG", global = true)]
     config: Option<PathBuf>,
 
     /// HTTP listen address. Default: 127.0.0.1:3001
-    #[arg(long, value_name = "HOST:PORT", help_heading = "Server")]
+    #[arg(long, value_name = "HOST:PORT", help_heading = "Server", global = true)]
     bind: Option<SocketAddr>,
 
     /// Overall HTTP request timeout in seconds (buffered /query only).
-    #[arg(long, value_name = "SECS", help_heading = "Server")]
+    #[arg(long, value_name = "SECS", help_heading = "Server", global = true)]
     request_timeout: Option<u64>,
 
     /// Max request body size in bytes.
-    #[arg(long, value_name = "BYTES", help_heading = "Server")]
+    #[arg(long, value_name = "BYTES", help_heading = "Server", global = true)]
     max_body_bytes: Option<usize>,
 
     /// SQL Server hostname. Default: localhost
-    #[arg(long, value_name = "HOST", help_heading = "SQL Server")]
+    #[arg(long, value_name = "HOST", help_heading = "SQL Server", global = true)]
     mssql_host: Option<String>,
 
     /// SQL Server port. Ignored when --mssql-instance is set. Default: 1433
-    #[arg(long, value_name = "PORT", help_heading = "SQL Server")]
+    #[arg(long, value_name = "PORT", help_heading = "SQL Server", global = true)]
     mssql_port: Option<u16>,
 
     /// Named instance (e.g. SQLEXPRESS). Port is discovered via SQL Browser on UDP 1434.
-    #[arg(long, value_name = "NAME", help_heading = "SQL Server")]
+    #[arg(long, value_name = "NAME", help_heading = "SQL Server", global = true)]
     mssql_instance: Option<String>,
 
     /// Default database when a request does not specify one.
-    #[arg(long, value_name = "DB", help_heading = "SQL Server")]
+    #[arg(long, value_name = "DB", help_heading = "SQL Server", global = true)]
     default_database: Option<String>,
 
     /// TLS mode for the SQL Server connection. Default: required
-    #[arg(long, value_enum, value_name = "MODE", help_heading = "SQL Server")]
+    #[arg(long, value_enum, value_name = "MODE", help_heading = "SQL Server", global = true)]
     encryption: Option<EncryptionArg>,
 
     /// Accept self-signed SQL Server certificates.
-    #[arg(long, action = ArgAction::SetTrue, help_heading = "SQL Server")]
+    #[arg(long, action = ArgAction::SetTrue, help_heading = "SQL Server", global = true)]
     trust_server_certificate: bool,
 
     /// Application name reported to SQL Server.
-    #[arg(long, value_name = "NAME", help_heading = "SQL Server")]
+    #[arg(long, value_name = "NAME", help_heading = "SQL Server", global = true)]
     application_name: Option<String>,
 
     /// Max rows returned by /query (buffered). /query/stream is unbounded.
-    #[arg(long, value_name = "N", help_heading = "Limits")]
+    #[arg(long, value_name = "N", help_heading = "Limits", global = true)]
     max_rows: Option<usize>,
 
     /// Per-query timeout in seconds enforced inside SQL Server execution.
-    #[arg(long, value_name = "SECS", help_heading = "Limits")]
+    #[arg(long, value_name = "SECS", help_heading = "Limits", global = true)]
     query_timeout: Option<u64>,
 
     /// Max concurrent connections per (user, password, database) tuple.
-    #[arg(long, value_name = "N", help_heading = "Pool")]
+    #[arg(long, value_name = "N", help_heading = "Pool", global = true)]
     pool_size: Option<u32>,
 
     /// Idle connections kept warm per credential pool.
-    #[arg(long, value_name = "N", help_heading = "Pool")]
+    #[arg(long, value_name = "N", help_heading = "Pool", global = true)]
     pool_min_idle: Option<u32>,
 
     /// Log level: trace | debug | info | warn | error
-    #[arg(long, value_name = "LEVEL", help_heading = "Logging")]
+    #[arg(long, value_name = "LEVEL", help_heading = "Logging", global = true)]
     log_level: Option<String>,
 
     /// Log SQL text (never parameter values).
-    #[arg(long, action = ArgAction::SetTrue, help_heading = "Logging")]
+    #[arg(long, action = ArgAction::SetTrue, help_heading = "Logging", global = true)]
     log_sql: bool,
 }
 
@@ -264,10 +269,16 @@ fn main() -> anyhow::Result<()> {
             Ok(())
         }
 
-        Cmd::PrintConfig => {
+        Cmd::PrintConfig { output } => {
             let c = Config::default();
             let s = toml::to_string_pretty(&c)?;
-            print!("{s}");
+            match output {
+                Some(path) => {
+                    std::fs::write(&path, s.as_bytes())?;
+                    println!("wrote {}", path.display());
+                }
+                None => print!("{s}"),
+            }
             Ok(())
         }
     }
@@ -281,6 +292,6 @@ fn run_foreground(cfg: Config) -> anyhow::Result<()> {
         .build()?;
     rt.block_on(async {
         let state = server::AppState::from_config(cfg.clone());
-        server::serve(state, cfg.server.bind).await
+        server::serve(state, cfg.server.bind, server::ctrl_c_shutdown()).await
     })
 }

@@ -66,10 +66,12 @@ pub mod windows {
             crate::server::init_logging(&cfg.log.level)?;
             let state = crate::server::AppState::from_config(cfg.clone());
 
-            tokio::select! {
-                res = crate::server::serve(state, cfg.server.bind) => res,
-                _ = shutdown_rx => Ok(()),
-            }
+            let shutdown = async move {
+                let _ = shutdown_rx.await;
+                tracing::info!("shutdown signal received from SCM");
+            };
+
+            crate::server::serve(state, cfg.server.bind, shutdown).await
         });
 
         let _ = status_handle.set_service_status(ServiceStatus {

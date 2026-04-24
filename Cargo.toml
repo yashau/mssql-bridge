@@ -1,6 +1,6 @@
 [package]
 name = "mssql-bridge"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.75"
 description = "A thin HTTP-to-MSSQL proxy. Speak SQL Server from anywhere that can make a fetch call."

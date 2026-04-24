@@ -52,17 +52,23 @@ pub fn router(state: AppState) -> Router {
         .with_state(state)
 }
 
-pub async fn serve(state: AppState, bind: SocketAddr) -> anyhow::Result<()> {
+pub async fn serve<F>(state: AppState, bind: SocketAddr, shutdown: F) -> anyhow::Result<()>
+where
+    F: std::future::Future<Output = ()> + Send + 'static,
+{
     let app = router(state);
     info!(%bind, "listening");
     let listener = tokio::net::TcpListener::bind(bind).await?;
     axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
+        .with_graceful_shutdown(shutdown)
         .await?;
     Ok(())
 }
 
-async fn shutdown_signal() {
+/// Foreground shutdown future. Waits for Ctrl-C on Windows, or
+/// SIGTERM/SIGINT on Unix. Intended for console use; the Windows service
+/// path uses its own SCM-driven oneshot instead.
+pub async fn ctrl_c_shutdown() {
     #[cfg(unix)]
     {
         use tokio::signal::unix::{signal, SignalKind};
@@ -195,6 +201,7 @@ pub fn init_logging(level: &str) -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(filter)
         .with_target(false)
+        .with_ansi(false)
         .init();
     Ok(())
 }

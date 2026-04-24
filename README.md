@@ -142,8 +142,8 @@ mssql-bridge --mssql-host sqlbox.local --mssql-instance SQLEXPRESS
 # Or load config.toml; CLI flags still override any field it defines
 mssql-bridge --config ./config.toml --bind 0.0.0.0:8080 --log-sql
 
-# Generate a starter config.toml
-mssql-bridge print-config > config.toml
+# Generate a starter config.toml (writes UTF-8 without BOM; avoids PS redirect issues)
+mssql-bridge print-config --output config.toml
 ```
 
 Full help:

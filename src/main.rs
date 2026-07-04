@@ -13,6 +13,8 @@ use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 
 use crate::config::{Config, Encryption};
 
+const APP_VERSION: &str = env!("MSSQL_BRIDGE_VERSION");
+
 const LONG_ABOUT: &str = "\
 A thin HTTP-to-MSSQL proxy.
 
@@ -37,7 +39,7 @@ Generate a starter config.toml:
 #[derive(Parser, Debug)]
 #[command(
     name = "mssql-bridge",
-    version,
+    version = APP_VERSION,
     about = "HTTP-to-MSSQL proxy",
     long_about = LONG_ABOUT,
     disable_help_subcommand = true
@@ -83,7 +85,13 @@ enum Cmd {
 #[derive(Args, Debug, Clone, Default)]
 struct Overrides {
     /// Path to config.toml. Overrides still apply on top of it.
-    #[arg(long, short, value_name = "PATH", env = "MSSQL_BRIDGE_CONFIG", global = true)]
+    #[arg(
+        long,
+        short,
+        value_name = "PATH",
+        env = "MSSQL_BRIDGE_CONFIG",
+        global = true
+    )]
     config: Option<PathBuf>,
 
     /// HTTP listen address. Default: 127.0.0.1:3001
@@ -115,7 +123,13 @@ struct Overrides {
     default_database: Option<String>,
 
     /// TLS mode for the SQL Server connection. Default: required
-    #[arg(long, value_enum, value_name = "MODE", help_heading = "SQL Server", global = true)]
+    #[arg(
+        long,
+        value_enum,
+        value_name = "MODE",
+        help_heading = "SQL Server",
+        global = true
+    )]
     encryption: Option<EncryptionArg>,
 
     /// Accept self-signed SQL Server certificates.

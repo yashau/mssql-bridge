@@ -128,7 +128,11 @@ where
     let mut result_set_idx: i64 = -1;
     let mut current_columns: Vec<ColumnMeta> = Vec::new();
 
-    while let Some(item) = stream.try_next().await.map_err(BridgeError::from_tiberius)? {
+    while let Some(item) = stream
+        .try_next()
+        .await
+        .map_err(BridgeError::from_tiberius)?
+    {
         match item {
             QueryItem::Metadata(meta) => {
                 result_set_idx += 1;
@@ -220,7 +224,11 @@ async fn collect_result_sets(
     let mut out: Vec<ResultSet> = Vec::new();
     let mut total_rows = 0usize;
 
-    while let Some(item) = stream.try_next().await.map_err(BridgeError::from_tiberius)? {
+    while let Some(item) = stream
+        .try_next()
+        .await
+        .map_err(BridgeError::from_tiberius)?
+    {
         match item {
             QueryItem::Metadata(meta) => {
                 let columns = meta

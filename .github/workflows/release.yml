@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9]*"
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: write
+
+jobs:
+  gates:
+    name: Release Gates
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install mise
+        uses: jdx/mise-action@v4
+
+      - name: Verify release tag
+        run: mise run release:verify-tag
+
+      - name: Run CI gates
+        run: mise run ci
+
+  package:
+    name: Package
+    needs: gates
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install mise
+        uses: jdx/mise-action@v4
+
+      - name: Package release
+        run: mise run release:package
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ runner.os }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install mise
+        uses: jdx/mise-action@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: mise run release:publish

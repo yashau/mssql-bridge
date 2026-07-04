@@ -1,0 +1,28 @@
+name: Miri
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+jobs:
+  miri:
+    name: Miri Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install mise
+        uses: jdx/mise-action@v4
+
+      - name: Run Miri
+        run: mise run miri

@@ -30,12 +30,13 @@ pub fn router(state: AppState) -> Router {
     let body_limit = state.config.server.max_body_bytes;
     let timeout = Duration::from_secs(state.config.server.request_timeout_secs);
 
-    let buffered = Router::new()
-        .route("/query", post(handle_query))
-        .layer(TimeoutLayer::with_status_code(
-            StatusCode::GATEWAY_TIMEOUT,
-            timeout,
-        ));
+    let buffered =
+        Router::new()
+            .route("/query", post(handle_query))
+            .layer(TimeoutLayer::with_status_code(
+                StatusCode::GATEWAY_TIMEOUT,
+                timeout,
+            ));
 
     let streaming = Router::new().route("/query/stream", post(handle_query_stream));
 

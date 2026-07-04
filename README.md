@@ -115,13 +115,57 @@ Config is resolved in this order: `--config`, `MSSQL_BRIDGE_CONFIG` env var, `./
 
 ---
 
+## Development
+
+This project uses [mise](https://mise.jdx.dev/) for tool setup and project tasks.
+
+Available tasks include:
+
+```shell
+mise run setup
+mise run gate
+mise run miri
+mise run ci
+mise run version:next
+mise run version:cut
+mise run version:push
+mise run release:build
+mise run release:package
+mise run release:publish
+```
+
+Use `mise run setup` to install stable Rust, Clippy, rustfmt, and nightly Miri. Use `mise run gate` for the standard local gate: formatting, Clippy, and tests. Use `mise run ci` for the full gate, including Miri.
+
 ## Build
 
 ```
-cargo build --release
+mise run release:build
 ```
 
 The release binary is at `target/release/mssql-bridge` (`.exe` on Windows).
+
+---
+
+## Versioning and releases
+
+Releases use calendar versions: `YYYY-MM-DD-N`, where `N` is the release sequence for that date. Git tags are prefixed with `v`, for example `v2026-07-04-1`.
+
+```shell
+mise run version:next                 # print today's next calendar version
+mise run version:cut                  # create today's next annotated tag
+mise run version:cut 2026-07-04-2     # create a specific annotated tag
+mise run version:push 2026-07-04-2    # push a release tag
+mise run release:package              # package artifacts from a release tag
+mise run release:publish              # publish packaged artifacts to GitHub
+```
+
+Push a release tag to publish:
+
+```shell
+git push origin v2026-07-04-1
+```
+
+Tag pushes run the GitHub release workflow, which validates the tag, runs `mise run ci`, builds release archives for Linux, macOS, and Windows, and uploads them to a GitHub Release.
 
 ---
 

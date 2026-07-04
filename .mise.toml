@@ -1,0 +1,282 @@
+[tools]
+rust = "stable"
+
+[tasks.setup]
+description = "Install Rust toolchains and components used by project tasks"
+run = [
+  "rustup toolchain install stable --profile minimal --component clippy,rustfmt",
+  "rustup toolchain install nightly --profile minimal --component miri",
+]
+
+[tasks."setup:stable"]
+description = "Install stable Rust with clippy and rustfmt"
+hide = true
+run = "rustup toolchain install stable --profile minimal --component clippy,rustfmt"
+
+[tasks."setup:miri"]
+description = "Install nightly Rust with Miri"
+hide = true
+run = "rustup toolchain install nightly --profile minimal --component miri"
+
+[tasks.fmt]
+description = "Format Rust sources"
+hide = true
+depends = ["setup:stable"]
+run = "cargo fmt --all"
+
+[tasks."fmt:check"]
+description = "Check Rust formatting"
+hide = true
+depends = ["setup:stable"]
+run = "cargo fmt --all -- --check"
+
+[tasks.clippy]
+description = "Run Clippy with warnings denied"
+hide = true
+depends = ["setup:stable"]
+run = "cargo clippy --all-targets --all-features -- -D warnings"
+
+[tasks.test]
+description = "Run the Rust test suite"
+hide = true
+depends = ["setup:stable"]
+run = "cargo test --all-features --locked"
+
+[tasks.miri]
+description = "Run tests under Miri"
+depends = ["setup:miri"]
+run = "cargo +nightly miri test --all-features --locked"
+
+[tasks.gate]
+description = "Run local non-Miri gates"
+depends = ["fmt:check", "clippy", "test"]
+run = "echo gate complete"
+
+[tasks.ci]
+description = "Run all CI gates"
+depends = ["gate", "miri"]
+run = "echo ci complete"
+
+[tasks.default]
+description = "Run the standard local gate"
+hide = true
+depends = ["gate"]
+run = "echo default complete"
+
+[tasks."version:current"]
+description = "Print the current calendar version from the tag, or the Cargo package version"
+hide = true
+shell = "pwsh -NoProfile -Command"
+run = '''
+$ErrorActionPreference = 'Stop'
+$tag = $env:GITHUB_REF_NAME
+if ([string]::IsNullOrWhiteSpace($tag)) {
+  $tag = git describe --tags --exact-match 2>$null
+  if ($LASTEXITCODE -ne 0) {
+    $tag = ''
+  }
+}
+if ($tag -match '^v?(\d{4}-\d{2}-\d{2}-\d+)$') {
+  $Matches[1]
+} else {
+  cargo metadata --no-deps --format-version 1 |
+    ConvertFrom-Json |
+    Select-Object -ExpandProperty packages |
+    Select-Object -First 1 -ExpandProperty version
+}
+'''
+
+[tasks."version:next"]
+description = "Print the next YYYY-MM-DD-N version for today"
+shell = "pwsh -NoProfile -Command"
+run = '''
+$ErrorActionPreference = 'Stop'
+$date = (Get-Date).ToString('yyyy-MM-dd')
+$prefix = "v$date-"
+$max = 0
+git tag --list "$prefix*" | ForEach-Object {
+  if ($_ -match "^v$date-(\d+)$") {
+    $max = [Math]::Max($max, [int]$Matches[1])
+  }
+}
+"$date-$($max + 1)"
+'''
+
+[tasks."version:validate"]
+description = "Validate a YYYY-MM-DD-N calendar version"
+hide = true
+usage = '''
+arg "<version>" help="Version to validate, with or without a leading v"
+'''
+shell = "pwsh -NoProfile -Command"
+run = '''
+$ErrorActionPreference = 'Stop'
+$version = $env:usage_version
+if ($version.StartsWith('v')) {
+  $version = $version.Substring(1)
+}
+if ($version -notmatch '^(\d{4})-(\d{2})-(\d{2})-(\d+)$') {
+  throw "Version '$($env:usage_version)' must match YYYY-MM-DD-N, optionally prefixed with v."
+}
+$date = "$($Matches[1])-$($Matches[2])-$($Matches[3])"
+$parsed = [DateTime]::ParseExact(
+  $date,
+  'yyyy-MM-dd',
+  [Globalization.CultureInfo]::InvariantCulture,
+  [Globalization.DateTimeStyles]::None
+)
+if ($parsed.ToString('yyyy-MM-dd') -ne $date) {
+  throw "Version '$($env:usage_version)' contains an invalid date."
+}
+if ([int]$Matches[4] -lt 1) {
+  throw "Version sequence must be 1 or greater."
+}
+$version
+'''
+
+[tasks."release:verify-tag"]
+description = "Verify the current Git tag is a valid release calendar version"
+hide = true
+shell = "pwsh -NoProfile -Command"
+run = '''
+$ErrorActionPreference = 'Stop'
+$tag = $env:GITHUB_REF_NAME
+if ([string]::IsNullOrWhiteSpace($tag)) {
+  $tag = git describe --tags --exact-match 2>$null
+}
+if ([string]::IsNullOrWhiteSpace($tag)) {
+  throw 'Release builds must run from a tag.'
+}
+mise run --quiet version:validate -- $tag | Out-Null
+if ($LASTEXITCODE -ne 0) {
+  throw "Invalid release tag '$tag'."
+}
+'''
+
+[tasks."version:cut"]
+description = "Create an annotated vYYYY-MM-DD-N tag; pass a version or omit it for today's next sequence"
+usage = '''
+arg "<version>" help="Calendar version to tag, with or without v" default=""
+'''
+shell = "pwsh -NoProfile -Command"
+run = '''
+$ErrorActionPreference = 'Stop'
+$version = $env:usage_version
+if ([string]::IsNullOrWhiteSpace($version)) {
+  $version = mise run --quiet version:next
+  if ($LASTEXITCODE -ne 0) {
+    throw 'Failed to determine the next release version.'
+  }
+}
+$version = mise run --quiet version:validate -- $version
+if ($LASTEXITCODE -ne 0) {
+  throw "Invalid release version '$version'."
+}
+$tag = "v$version"
+git diff --quiet
+if ($LASTEXITCODE -ne 0) {
+  throw 'Working tree has unstaged changes; commit or stash before cutting a release tag.'
+}
+git diff --cached --quiet
+if ($LASTEXITCODE -ne 0) {
+  throw 'Working tree has staged changes; commit or stash before cutting a release tag.'
+}
+git tag -a $tag -m "Release $version"
+"Created $tag"
+"Push with: git push origin $tag"
+'''
+
+[tasks."version:push"]
+description = "Push a vYYYY-MM-DD-N release tag; pass a version/tag or run from the tag"
+usage = '''
+arg "<version>" help="Calendar version or tag to push" default=""
+'''
+shell = "pwsh -NoProfile -Command"
+run = '''
+$ErrorActionPreference = 'Stop'
+$version = $env:usage_version
+if ([string]::IsNullOrWhiteSpace($version)) {
+  $version = git describe --tags --exact-match 2>$null
+  if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($version)) {
+    throw 'Pass a version/tag or run this task from a tagged commit.'
+  }
+}
+$version = mise run --quiet version:validate -- $version
+if ($LASTEXITCODE -ne 0) {
+  throw "Invalid release version '$version'."
+}
+git push origin "v$version"
+'''
+
+[tasks."release:build"]
+description = "Build a release binary with the current release version embedded"
+depends = ["setup:stable"]
+shell = "pwsh -NoProfile -Command"
+run = '''
+$ErrorActionPreference = 'Stop'
+$version = mise run --quiet version:current
+if ($LASTEXITCODE -ne 0) {
+  throw 'Failed to determine the release version.'
+}
+$env:MSSQL_BRIDGE_VERSION = $version
+cargo build --release --locked
+'''
+
+[tasks."release:package"]
+description = "Package a release artifact for the current OS"
+depends = ["release:verify-tag", "release:build"]
+shell = "pwsh -NoProfile -Command"
+run = '''
+$ErrorActionPreference = 'Stop'
+$version = mise run --quiet version:current
+if ($LASTEXITCODE -ne 0) {
+  throw 'Failed to determine the release version.'
+}
+$exeName = if ($IsWindows) { 'mssql-bridge.exe' } else { 'mssql-bridge' }
+$triple = rustc -vV |
+  Select-String '^host: ' |
+  ForEach-Object { $_.Line.Substring(6) }
+$packageName = "mssql-bridge-$version-$triple"
+$dist = Join-Path $PWD 'dist'
+$stage = Join-Path $dist $packageName
+Remove-Item -Recurse -Force $dist -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force $stage | Out-Null
+Copy-Item "target/release/$exeName" $stage
+Copy-Item 'README.md', 'LICENSE', 'config.example.toml' $stage
+if ($IsWindows) {
+  $archive = Join-Path $dist "$packageName.zip"
+  Remove-Item -Force $archive -ErrorAction SilentlyContinue
+  Compress-Archive -Path "$stage/*" -DestinationPath $archive
+} else {
+  $archive = Join-Path $dist "$packageName.tar.gz"
+  tar -czf $archive -C $dist $packageName
+}
+$archive
+'''
+
+[tasks."release:publish"]
+description = "Create or update the GitHub release for the current tag and upload dist artifacts"
+depends = ["release:verify-tag"]
+shell = "pwsh -NoProfile -Command"
+run = '''
+$ErrorActionPreference = 'Stop'
+$tag = $env:GITHUB_REF_NAME
+if ([string]::IsNullOrWhiteSpace($tag)) {
+  $tag = git describe --tags --exact-match
+}
+$version = mise run --quiet version:validate -- $tag
+if ($LASTEXITCODE -ne 0) {
+  throw "Invalid release tag '$tag'."
+}
+$artifacts = Get-ChildItem -Path 'dist' -Recurse -File |
+  Where-Object { $_.Name -match '\.(zip|tar\.gz)$' } |
+  Select-Object -ExpandProperty FullName
+if (-not $artifacts) {
+  throw 'No release artifacts found under dist/.'
+}
+gh release view $tag *> $null
+if ($LASTEXITCODE -ne 0) {
+  gh release create $tag --title "mssql-bridge $version" --notes "Release $version"
+}
+gh release upload $tag @artifacts --clobber
+'''

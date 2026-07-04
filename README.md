@@ -154,7 +154,7 @@ Releases use calendar versions: `YYYY-MM-DD-N`, where `N` is the release sequenc
 mise run version:next                 # print today's next calendar version
 mise run version:cut                  # create today's next annotated tag
 mise run version:cut 2026-07-04-2     # create a specific annotated tag
-mise run version:push 2026-07-04-2    # push a release tag
+mise run version:push 2026-07-04-2    # push a release tag and watch publish
 mise run release:package              # package artifacts from a release tag
 mise run release:publish              # publish packaged artifacts to GitHub
 ```
@@ -165,7 +165,7 @@ Push a release tag to publish:
 git push origin v2026-07-04-1
 ```
 
-Tag pushes run the GitHub release workflow, which validates the tag, runs `mise run ci`, builds release archives for Linux, macOS, and Windows, and uploads them to a GitHub Release.
+Tag pushes run the GitHub release workflow, which validates the tag, runs `mise run ci`, builds release archives for Linux, macOS, and Windows, and uploads them to a GitHub Release. `mise run version:push` pushes the tag and watches that workflow to completion.
 
 ---
 
